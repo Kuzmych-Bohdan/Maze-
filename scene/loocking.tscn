@@ -1,0 +1,51 @@
+[gd_scene load_steps=6 format=3 uid="uid://ckianyvbkjw0x"]
+
+[ext_resource type="Script" path="res://scripts/loockingScript.gd" id="1_ei7i8"]
+[ext_resource type="Texture2D" uid="uid://cut2gmqow24gg" path="res://sprite/object/looking.png" id="1_ga8ae"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_d3xio"]
+size = Vector2(88, 73)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_c212j"]
+size = Vector2(90, 75)
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_alhnx"]
+radius = 351.256
+
+[node name="looking" type="CharacterBody2D"]
+script = ExtResource("1_ei7i8")
+
+[node name="Looking" type="Sprite2D" parent="."]
+position = Vector2(-0.249999, 7.75)
+scale = Vector2(14.9375, 14.9375)
+texture = ExtResource("1_ga8ae")
+
+[node name="bodyMain" type="CollisionShape2D" parent="."]
+light_mask = 5
+visibility_layer = 5
+position = Vector2(0, 0.5)
+shape = SubResource("RectangleShape2D_d3xio")
+
+[node name="bodyArea" type="Area2D" parent="."]
+collision_layer = 2
+collision_mask = 2
+
+[node name="body" type="CollisionShape2D" parent="bodyArea"]
+light_mask = 2
+visibility_layer = 2
+position = Vector2(-0.25, 0.25)
+shape = SubResource("RectangleShape2D_c212j")
+
+[node name="move" type="Area2D" parent="."]
+collision_layer = 128
+collision_mask = 128
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="move"]
+light_mask = 128
+visibility_layer = 128
+shape = SubResource("CircleShape2D_alhnx")
+
+[connection signal="body_entered" from="bodyArea" to="." method="_on_body_area_body_entered"]
+[connection signal="body_exited" from="bodyArea" to="." method="_on_body_area_body_exited"]
+[connection signal="body_entered" from="move" to="." method="_on_move_body_entered"]
+[connection signal="body_exited" from="move" to="." method="_on_move_body_exited"]

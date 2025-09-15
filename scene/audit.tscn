@@ -1,0 +1,35 @@
+[gd_scene load_steps=4 format=3 uid="uid://dfr5v37muwxw2"]
+
+[ext_resource type="Script" path="res://scene/lostScript.gd" id="1_60nwq"]
+[ext_resource type="Texture2D" uid="uid://0v0qce6j2uvw" path="res://sprite/object/lost.png" id="2_epm16"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_c0uxt"]
+size = Vector2(78.1248, 68.7498)
+
+[node name="audit" type="StaticBody2D"]
+light_mask = 129
+visibility_layer = 129
+scale = Vector2(0.320001, 0.320001)
+collision_layer = 129
+collision_mask = 129
+script = ExtResource("1_60nwq")
+metadata/_edit_group_ = true
+
+[node name="audit" type="Sprite2D" parent="."]
+position = Vector2(1, 0)
+scale = Vector2(12.875, 12.875)
+texture = ExtResource("2_epm16")
+
+[node name="wall" type="Area2D" parent="."]
+light_mask = 0
+visibility_layer = 4
+collision_layer = 9
+collision_mask = 9
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="wall"]
+light_mask = 0
+visibility_layer = 8
+position = Vector2(1.56249, -6.24997)
+shape = SubResource("RectangleShape2D_c0uxt")
+
+[connection signal="body_entered" from="wall" to="." method="_on_area_2d_body_entered"]

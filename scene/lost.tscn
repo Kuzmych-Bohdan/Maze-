@@ -1,0 +1,19 @@
+[gd_scene load_steps=4 format=3 uid="uid://c5v0d2amtjt4d"]
+
+[ext_resource type="Script" path="res://scene/lostScript.gd" id="1_po8un"]
+[ext_resource type="Texture2D" uid="uid://0v0qce6j2uvw" path="res://sprite/object/lost.png" id="1_wa4m6"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_7sbfs"]
+size = Vector2(77, 63)
+
+[node name="audit" type="CharacterBody2D"]
+script = ExtResource("1_po8un")
+
+[node name="audit" type="Sprite2D" parent="."]
+position = Vector2(1, 0)
+scale = Vector2(12.875, 12.875)
+texture = ExtResource("1_wa4m6")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(1.5, -6.5)
+shape = SubResource("RectangleShape2D_7sbfs")

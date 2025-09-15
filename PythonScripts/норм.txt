@@ -1,0 +1,202 @@
+import asyncio
+import websockets
+import numpy as np
+import json
+from sklearn.linear_model import LinearRegression, Ridge
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.pipeline import make_pipeline
+from sklearn.svm import SVR
+from sklearn.ensemble import RandomForestRegressor
+
+class PredictionServer:
+    def __init__(self):
+        self.data_history = {
+            'clear_x': [],
+            'clear_y': [],
+            'wall_x': [],
+            'wall_y': []
+        }
+        self.true_collisions = []  # Зіткнення 0 або 1
+        self.models = {
+            'linear': LinearRegression(),
+            'polynomial': make_pipeline(
+                PolynomialFeatures(degree=2),
+                LinearRegression()
+            ),
+            'ridge': Ridge(alpha=1.0),
+            'svr': SVR(kernel='rbf', C=100, gamma=0.1, epsilon=.1),
+            'random_forest': RandomForestRegressor(n_estimators=100)
+        }
+        self.min_data_points = 5
+        self.max_data_points = 50
+
+    async def handle_client(self, websocket, path):
+        print("✅ Клієнт підключений")
+        try:
+            async for message in websocket:
+                try:
+                    print("\n--- Отримано нове повідомлення ---")
+                    data = self._parse_message(message)
+                    if not data:
+                        await websocket.send(json.dumps({
+                            "error": "Отримано порожні дані",
+                            "status": "error"
+                        }))
+                        continue
+
+                    self._update_data(data)
+
+                    if len(self.data_history['clear_x']) >= self.min_data_points:
+                        response = self._generate_predictions()
+                    else:
+                        response = {
+                            "status": "waiting",
+                            "message": f"Недостатньо даних (потрібно {self.min_data_points})",
+                            "current_data": len(self.data_history['clear_x'])
+                        }
+
+                    await websocket.send(json.dumps(response))
+
+                except json.JSONDecodeError:
+                    await websocket.send(json.dumps({
+                        "error": "Невірний формат JSON",
+                        "status": "error"
+                    }))
+                except ValueError as e:
+                    await websocket.send(json.dumps({
+                        "error": str(e),
+                        "status": "error"
+                    }))
+                except Exception as e:
+                    await websocket.send(json.dumps({
+                        "error": "Внутрішня помилка сервера",
+                        "status": "error"
+                    }))
+
+        except websockets.exceptions.ConnectionClosed:
+            print("🔌 Клієнт відключився")
+
+    def _parse_message(self, message):
+        try:
+            data = json.loads(message)
+            if not data or not data.get('clearSector') or not data.get('wallSector'):
+                return None
+
+            clear_x = data['clearSector'].get('positionClearSectorX', []) or \
+                      data['clearSector'].get('positionclearSectorX', [])
+            clear_y = data['clearSector'].get('positionClearSectorY', []) or \
+                      data['clearSector'].get('positionclearSectorY', [])
+            wall_x = data['wallSector'].get('positionWallSectorX', []) or \
+                     data['wallSector'].get('positionwallSectorX', [])
+            wall_y = data['wallSector'].get('positionWallSectorY', []) or \
+                     data['wallSector'].get('positionwallSectorY', [])
+
+            collisions = data.get('collisions', [])
+
+            if not all(isinstance(lst, list) for lst in [clear_x, clear_y, wall_x, wall_y]):
+                raise ValueError("Координати мають бути списками")
+
+            return {
+                'clear_x': [float(x) for x in clear_x],
+                'clear_y': [float(y) for y in clear_y],
+                'wall_x': [float(x) for x in wall_x],
+                'wall_y': [float(y) for y in wall_y],
+                'collisions': collisions
+            }
+
+        except Exception as e:
+            raise ValueError(f"Помилка парсингу даних: {str(e)}")
+
+    def _update_data(self, new_data):
+        for key in self.data_history:
+            self.data_history[key].extend(new_data[key])
+            self.data_history[key] = self.data_history[key][-self.max_data_points:]
+
+        if 'collisions' in new_data and new_data['collisions']:
+            for collision in new_data['collisions']:
+                wall_status = collision.get('wall')
+                if wall_status in [0, 1]:
+                    self.true_collisions.append(int(wall_status))
+                    self.true_collisions = self.true_collisions[-self.max_data_points:]
+
+    def _generate_predictions(self):
+        min_len = min(len(self.data_history[key]) for key in self.data_history)
+        print(f"[INFO] Кількість даних: {min_len} точок")
+        
+        if min_len < self.min_data_points:
+            print("[WARN] Недостатньо даних для прогнозу")
+            return {"status": "waiting", "message": "Недостатньо даних"}
+
+        X = np.column_stack((
+            self.data_history['clear_x'][:min_len],
+            self.data_history['wall_x'][:min_len],
+            self.data_history['wall_y'][:min_len]
+        ))
+        y = np.array(self.data_history['clear_y'][:min_len])
+
+        results = {"status": "success", "models": {}}
+        predictions_by_model = {}
+
+        for name, model in self.models.items():
+            try:
+                model.fit(X, y)
+                x_pred = self.data_history['clear_x'][-5:]
+                X_pred = np.column_stack((
+                    x_pred,
+                    self.data_history['wall_x'][-5:],
+                    self.data_history['wall_y'][-5:]
+                ))
+
+                predictions = model.predict(X_pred).tolist()
+                predictions_by_model[name] = predictions
+
+                print(f"[{name.upper()}] Прогнозовані Y: {np.round(predictions, 3).tolist()}")
+
+                results["models"][f"{name}_X"] = x_pred
+                results["models"][f"{name}_Y"] = predictions
+
+            except Exception as e:
+                print(f"[ERROR] Модель {name} зламалась: {e}")
+                results["models"][name] = {"error": str(e)}
+
+        # Accuracy по колізіям (якщо є)
+        if len(self.true_collisions) >= 5:
+            y_true = np.array(self.true_collisions[-5:])
+            print(f"[INFO] Істинні колізії: {y_true.tolist()}")
+
+            for name, preds in predictions_by_model.items():
+                try:
+                    y_pred_binary = [1 if p > 0.5 else 0 for p in preds]
+                    accuracy = (np.array(y_pred_binary) == y_true).mean()
+                    print(f"[{name.upper()}] Точність прогнозу колізій: {round(accuracy * 100, 2)}%")
+
+                    if 'prediction_quality' not in results:
+                        results["prediction_quality"] = {}
+                    results["prediction_quality"][name] = {
+                        "accuracy": round(accuracy, 3),
+                        "predicted": y_pred_binary,
+                        "true": y_true.tolist()
+                    }
+                except Exception as e:
+                    print(f"[ERROR] Обчислення accuracy для {name}: {e}")
+
+        return results
+
+
+async def main():
+    server = PredictionServer()
+    async with websockets.serve(
+        server.handle_client,
+        "localhost",
+        6000,
+        ping_interval=20,
+        ping_timeout=30
+    ):
+        print("🚀 Сервер запущено на ws://localhost:6000")
+        await asyncio.Future()
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n🛑 Сервер зупинено")
