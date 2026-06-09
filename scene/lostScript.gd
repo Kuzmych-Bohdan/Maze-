@@ -1,45 +1,25 @@
-extends StaticBody2D
+extends Area2D
 
-var wall := 0
-var model_name := ""
-
+var wall = 1
 
 
+func _ready():
+	body_entered.connect(_on_body_entered)
 
-@onready var area: Area2D = $Area2D
 
-func initialize(spawn_position: Vector2, model: String):
-	model_name = model
-	wall = 0
-	global_position = spawn_position
-	#print("🟢 Створено [", model_name, "] на позиції: ", global_position)
-	G.should_follow_prediction = true
-	
-	
-func _on_area_body_entered(body: Node) -> void:
-	if  wall == 0:
-		wall = 1
-		#print("🛑 Модель [", model_name, "] зафіксувала [", body, "] на ", global_position)
-		send_collision_data()
+func _on_body_entered(body):
 
-func send_collision_data():
-	var collision_data = {
-		"model": model_name,
+	# перевірка що це саме наш гравець (можеш прибрати якщо не треба)
+	if not body:
+		return
+
+	var wall_data = {
 		"wall": wall,
 		"position": {
 			"x": global_position.x,
 			"y": global_position.y
 		}
 	}
+
 	if G:
-		G.register_collision(collision_data)
-
-
-func _on_area_2d_body_entered(body):
-
-	wall = 0
-	#print("🟢 Модель [", model_name, "] не зафіксувала стіни на ", global_position)
-	send_collision_data()
-
-
-
+		G.register_collision("wall_hit", wall_data)

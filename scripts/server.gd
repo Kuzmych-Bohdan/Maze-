@@ -1,51 +1,102 @@
-# server.gd
 extends Node
 
-var client = WebSocketPeer.new()
-var url = "ws://localhost:6000"
-var send_timer = 0.0
-var send_interval = 1.0  # Відправляти кожну секунду
+var socket := WebSocketPeer.new()
+var connected := false
+
 
 func _ready():
-	var err = client.connect_to_url(url)
+	var err = socket.connect_to_url("ws://localhost:6000")
+
 	if err != OK:
-		push_error("Не вдалося підключитися до сервера")
+		print("❌ Не вдалося підключитися")
 	else:
-		print("✅ Успішне підключення до сервера")
+		print("🔄 Підключення...")
+
 
 func _process(delta):
-	client.poll()
-	
-	# Таймер для відправки даних
-	send_timer += delta
-	if send_timer >= send_interval:
-		send_timer = 0.0
+	socket.poll()
+
+	var state = socket.get_ready_state()
+
+	if state == WebSocketPeer.STATE_OPEN:
+		if not connected:
+			connected = true
+			print("✅ Connected to Python")
+
 		send_data()
-	
-	# Обробка вхідних повідомлень
-	while client.get_available_packet_count() > 0:
-		var packet = client.get_packet()
-		handle_server_response(packet.get_string_from_utf8())
+		receive_data()
 
+	elif state == WebSocketPeer.STATE_CLOSED:
+		if connected:
+			print("❌ Connection closed")
+			connected = false
+
+
+# =========================
+# ВІДПРАВКА
+# =========================
 func send_data():
-	if client.get_ready_state() != WebSocketPeer.STATE_OPEN:
-		print("⚠️ З'єднання не встановлено")
-		return
-	
 
-	var message = G.get_message_data()
+	var data = {
+		"clearSector": {
+			"positionClearSectorX": G.clear_positions_x,
+			"positionClearSectorY": G.clear_positions_y
+		},
+		"wallSector": {
+			"positionWallSectorX": G.wall_positions_x,
+			"positionWallSectorY": G.wall_positions_y
+		},
+		"collisions": G.collisions
+	}
 
-	
+	if G.clear_positions_x.size() > 0:
+		print("📤 Sending: ", G.clear_positions_x.size(), " positions")
+		socket.send_text(JSON.stringify(data))
 
-	client.put_packet(JSON.stringify(message).to_utf8_buffer())
+	G.collisions.clear()
 
-func handle_server_response(response):
-	var json_data = JSON.parse_string(response)
-	if json_data == null:
-		push_error("Не вдалося розібрати відповідь сервера")
-		return
-	
-	if json_data.has("error"):
-		push_error("Помилка сервера: " + str(json_data["error"]))
-	else:
-		G.process_server_data(json_data)
+
+# =========================
+# ОТРИМАННЯ
+# =========================
+func receive_data():
+
+	while socket.get_available_packet_count() > 0:
+
+		var msg = socket.get_packet().get_string_from_utf8()
+		var parsed = JSON.parse_string(msg)
+
+		if parsed == null:
+			print("❌ JSON parse failed")
+			return
+
+		if not parsed.has("status"):
+			print("❌ No status in response")
+			return
+
+		if parsed["status"] != "success":
+			if parsed["status"] == "waiting":
+				pass  # Collecting data, wait
+			else:
+				print("⚠️ Server status: ", parsed["status"])
+			return
+
+		if not parsed.has("models") or not parsed["models"].has("linear"):
+			print("❌ Invalid response structure")
+			return
+
+		var pos = parsed["models"]["linear"][0]
+
+		if pos is Array and pos.size() >= 2:
+			G.target_position = Vector2(pos[0], pos[1])
+			G.has_new_data = true
+			print("✅ Prediction received: ", G.target_position)
+		
+			# Keep last 2 positions for continuous data flow
+			if G.clear_positions_x.size() > 2:
+				G.clear_positions_x = G.clear_positions_x.slice(-2)
+				G.clear_positions_y = G.clear_positions_y.slice(-2)
+			if G.wall_positions_x.size() > 2:
+				G.wall_positions_x = G.wall_positions_x.slice(-2)
+				G.wall_positions_y = G.wall_positions_y.slice(-2)
+			print("🔄 Keeping last 2 positions for next batch")

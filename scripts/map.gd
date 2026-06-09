@@ -1,6 +1,7 @@
 extends Node2D
-@onready var textModelNow = $modelNow
+const Spawner = preload("res://scripts/Spawner.gd")
 
-
-func _process(delta):
-	textModelNow.text = G.modelNow
+func _ready():
+	var spawner = Spawner.new()
+	add_child(spawner)
+	print("🟢 Spawner активний")
