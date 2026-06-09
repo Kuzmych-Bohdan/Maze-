@@ -2,6 +2,8 @@ extends Node
 
 var socket := WebSocketPeer.new()
 var connected := false
+var send_cooldown = 0.3  # Затримка між надсиланнями (секунди)
+var send_timer = 0.0
 
 
 func _ready():
@@ -15,6 +17,7 @@ func _ready():
 
 func _process(delta):
 	socket.poll()
+	send_timer -= delta
 
 	var state = socket.get_ready_state()
 
@@ -49,9 +52,10 @@ func send_data():
 		"collisions": G.collisions
 	}
 
-	if G.clear_positions_x.size() > 0:
+	if G.clear_positions_x.size() > 0 and send_timer <= 0:
 		print("📤 Sending: ", G.clear_positions_x.size(), " positions")
 		socket.send_text(JSON.stringify(data))
+		send_timer = send_cooldown  # Встановити затримку
 
 	G.collisions.clear()
 
