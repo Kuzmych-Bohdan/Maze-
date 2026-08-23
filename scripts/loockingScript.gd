@@ -140,6 +140,7 @@ func check_predicted_stagnation(delta):
 # ПОШУК НАЙКРАЩОГО НАПРЯМУ УНИКАННЯ
 # =========================
 func find_best_avoidance_directions():
+	print("🧭 Alternative route search started: looking for detour around wall")
 	var finish_dir = (G.finish_position - global_position).normalized()
 
 	# Сортуємо напрями за близькістю до напрямку на фініш
