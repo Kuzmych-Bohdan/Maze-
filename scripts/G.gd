@@ -19,7 +19,7 @@ var wall_positions_y: Array = []
 
 
 # =========================
-#   КОЛІЗІЇ (🔥 ОСЬ НОВЕ)
+#   КОЛІЗІЇ 
 # =========================
 var collisions: Array = []
 
@@ -28,6 +28,44 @@ var collisions: Array = []
 #   ФІНІШ
 # =========================
 var finish_position: Vector2 = Vector2.ZERO
+
+const REGRESSION_MODELS = ["linear", "polynomial", "ridge", "svr", "random_forest"]
+var selected_regression: String = "linear"
+var initial_regression: String = "linear"
+var run_started: bool = false
+var run_started_msec: int = 0
+var active_character: CharacterBody2D
+var wall_hit_count: int = 0
+var movement_attempt_count: int = 0
+
+var textFinish = 0
+var finish_result_text: String = ""
+
+
+func log_message(message: String):
+	if textFinish == 0:
+		print(message)
+
+
+func begin_run():
+	if run_started:
+		return
+	run_started = true
+	initial_regression = selected_regression
+	run_started_msec = Time.get_ticks_msec()
+	wall_hit_count = 0
+	movement_attempt_count = 0
+
+
+func record_movement_attempt():
+	if run_started:
+		movement_attempt_count += 1
+
+
+func get_wall_hit_percentage() -> float:
+	if movement_attempt_count == 0:
+		return 0.0
+	return clampf(float(wall_hit_count) / movement_attempt_count * 100.0, 0.0, 100.0)
 
 
 # =========================
@@ -52,6 +90,8 @@ func register_collision(type: String, data):
 	collisions.append(event)
 
 	if type == "wall_hit":
+		if run_started:
+			wall_hit_count += 1
 		wall_positions_x.append(data["position"]["x"])
 		wall_positions_y.append(data["position"]["y"])
 

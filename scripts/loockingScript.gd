@@ -35,8 +35,22 @@ var predicted_stuck_threshold = 0.75
 var prev_predicted_position = Vector2.ZERO
 
 
+func _ready():
+	G.active_character = self
+
+
 func _physics_process(delta):
 	frame_count += 1
+	_handle_input_modes()
+
+	if Input.is_action_pressed("startUserMove"):
+		var input_direction = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+		velocity = input_direction * speed
+		if input_direction != Vector2.ZERO:
+			G.record_movement_attempt()
+		move_and_slide()
+		_record_position()
+		return
 
 	# Визначити цільову позицію
 	if G.target_position == Vector2.ZERO:
@@ -54,7 +68,29 @@ func _physics_process(delta):
 	else:
 		move_with_obstacle_avoidance(delta)
 
-	# Запис позиції
+	_record_position()
+
+
+func _handle_input_modes():
+	if Input.is_action_just_pressed("startUserMove"):
+		G.begin_run()
+		G.log_message("Manual control enabled")
+
+	if Input.is_action_just_pressed("AI"):
+		G.begin_run()
+		navigation_mode = "predicted"
+		G.log_message("AI navigation enabled with %s" % G.selected_regression)
+
+	for model_index in range(G.REGRESSION_MODELS.size()):
+		var action_name = "ui_select_model_%d" % (model_index + 1)
+		if Input.is_action_just_pressed(action_name):
+			G.selected_regression = G.REGRESSION_MODELS[model_index]
+			if G.run_started:
+				G.initial_regression = G.selected_regression
+			G.log_message("Selected regression: %s" % G.selected_regression)
+
+
+func _record_position():
 	if frame_count % 2 == 0:
 		G.clear_positions_x.append(global_position.x)
 		G.clear_positions_y.append(global_position.y)
@@ -73,6 +109,7 @@ func move_toward_predicted(delta):
 
 	dir = dir.normalized()
 	velocity = dir * speed
+	G.record_movement_attempt()
 	move_and_slide()
 
 	check_predicted_stagnation(delta)
@@ -86,7 +123,7 @@ func move_with_obstacle_avoidance(delta):
 
 	# Таймаут - повертаємося до прогнозу
 	if avoidance_timer > avoidance_timeout:
-		print("⏱️ Avoidance timeout! Returning to predicted mode")
+		G.log_message("Avoidance timeout. Returning to predicted mode")
 		navigation_mode = "predicted"
 		return
 
@@ -94,6 +131,7 @@ func move_with_obstacle_avoidance(delta):
 	if last_working_direction != Vector2.ZERO:
 		velocity = last_working_direction * speed
 		var prev_pos = global_position
+		G.record_movement_attempt()
 		move_and_slide()
 
 		# Перевіряємо, чи дійсно рухнулись
@@ -104,7 +142,7 @@ func move_with_obstacle_avoidance(delta):
 			return
 		else:
 			# Застрявли - шукаємо новий напрям
-			print("⚠️ Stuck in direction, finding new one...")
+			G.log_message("Stuck in direction, finding a new one")
 			find_best_avoidance_directions()
 	else:
 		# Якщо немає робочого напрямку, шукаємо
@@ -129,18 +167,26 @@ func check_predicted_stagnation(delta):
 		predicted_stuck_time = max(predicted_stuck_time - predicted_check_interval, 0.0)
 
 	if predicted_stuck_time >= predicted_stuck_threshold:
-		print("⚠️ Stuck near same coordinates too long, switching to avoidance")
+		_switch_regression_after_stuck()
+		G.log_message("Stuck near the same coordinates too long, switching to avoidance")
 		navigation_mode = "obstacle_avoidance"
 		avoidance_timer = 0.0
 		predicted_stuck_time = 0.0
 		find_best_avoidance_directions()
 
 
+func _switch_regression_after_stuck():
+	var current_index = G.REGRESSION_MODELS.find(G.selected_regression)
+	var next_index = (current_index + 1) % G.REGRESSION_MODELS.size()
+	G.selected_regression = G.REGRESSION_MODELS[next_index]
+	G.log_message("Stuck: switching regression to %s" % G.selected_regression)
+
+
 # =========================
 # ПОШУК НАЙКРАЩОГО НАПРЯМУ УНИКАННЯ
 # =========================
 func find_best_avoidance_directions():
-	print("🧭 Alternative route search started: looking for detour around wall")
+	G.log_message("Alternative route search started: looking for a detour around the wall")
 	var finish_dir = (G.finish_position - global_position).normalized()
 
 	# Сортуємо напрями за близькістю до напрямку на фініш
@@ -151,20 +197,20 @@ func find_best_avoidance_directions():
 		return dist_a < dist_b
 	)
 
-	print("🧭 Searching for free direction...")
+	G.log_message("Searching for a free direction")
 	for i in range(sorted_directions.size()):
 		var test_dir = sorted_directions[i]
 		
 		# Спробуємо рухатися в цьому напрямку
 		if try_move_in_direction(test_dir):
-			print("  ✅ Direction ", i, " is FREE: ", test_dir)
+			G.log_message("  Direction %d is free: %s" % [i, test_dir])
 			last_working_direction = test_dir
 			return
 		else:
-			print("  ❌ Direction ", i, " is BLOCKED: ", test_dir)
+			G.log_message("  Direction %d is blocked: %s" % [i, test_dir])
 
 	# Якщо немає вільних напрямів - спробуємо рандомний
-	print("🎲 No free directions! Using random...")
+	G.log_message("No free directions. Using a random direction")
 	last_working_direction = Vector2(randf_range(-1, 1), randf_range(-1, 1)).normalized()
 
 
@@ -177,6 +223,7 @@ func try_move_in_direction(direction: Vector2) -> bool:
 	
 	# Спробуємо рухатися
 	velocity = direction * speed
+	G.record_movement_attempt()
 	move_and_slide()
 	
 	# Перевіряємо, чи дійсно рухнулись

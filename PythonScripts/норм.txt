@@ -31,7 +31,7 @@ class PredictionServer:
         self.max_data_points = 50
 
     async def handle_client(self, websocket, path):
-        print("✅ Клієнт підключений")
+        print("Клієнт підключений")
         try:
             async for message in websocket:
                 try:
@@ -74,7 +74,7 @@ class PredictionServer:
                     }))
 
         except websockets.exceptions.ConnectionClosed:
-            print("🔌 Клієнт відключився")
+            print("Клієнт відключився")
 
     def _parse_message(self, message):
         try:
@@ -192,11 +192,11 @@ async def main():
         ping_interval=20,
         ping_timeout=30
     ):
-        print("🚀 Сервер запущено на ws://localhost:6000")
+        print("Сервер запущено на ws://localhost:6000")
         await asyncio.Future()
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\n🛑 Сервер зупинено")
+        print("\nСервер зупинено")

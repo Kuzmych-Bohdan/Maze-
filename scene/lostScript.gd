@@ -9,8 +9,7 @@ func _ready():
 
 func _on_body_entered(body):
 
-	# перевірка що це саме наш гравець (можеш прибрати якщо не треба)
-	if not body:
+	if body != G.active_character:
 		return
 
 	var wall_data = {

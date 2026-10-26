@@ -14,10 +14,10 @@ func _process(delta):
 	if G.has_new_data and spawn_timer <= 0:
 		# Усереднити позицію: (прогноз + фініш) / 2
 		var averaged_pos = (G.target_position + G.finish_position) / 2.0
-		print("🎯 Spawner activated!")
-		print("  Predicted: ", G.target_position)
-		print("  Finish: ", G.finish_position)
-		print("  Averaged: ", averaged_pos)
+		G.log_message("Spawner activated")
+		G.log_message("  Predicted: %s" % G.target_position)
+		G.log_message("  Finish: %s" % G.finish_position)
+		G.log_message("  Averaged: %s" % averaged_pos)
 		spawn_prediction(averaged_pos)
 		G.has_new_data = false
 		spawn_timer = spawn_cooldown  # Встановити затримку

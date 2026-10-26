@@ -20,6 +20,8 @@ texture = ExtResource("1_q8g0r")
 shape = SubResource("RectangleShape2D_13380")
 
 [node name="finishForObj" type="Area2D" parent="."]
+light_mask = 130
+visibility_layer = 130
 
 [node name="FinishCollision" type="CollisionShape2D" parent="finishForObj"]
 shape = SubResource("RectangleShape2D_0ccqo")

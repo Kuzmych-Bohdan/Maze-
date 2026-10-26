@@ -10,9 +10,9 @@ func _ready():
 	var err = socket.connect_to_url("ws://localhost:6000")
 
 	if err != OK:
-		print("❌ Не вдалося підключитися")
+		G.log_message("Не вдалося підключитися")
 	else:
-		print("🔄 Підключення...")
+		G.log_message("Підключення...")
 
 
 func _process(delta):
@@ -24,14 +24,14 @@ func _process(delta):
 	if state == WebSocketPeer.STATE_OPEN:
 		if not connected:
 			connected = true
-			print("✅ Connected to Python")
+			G.log_message("Connected to Python")
 
 		send_data()
 		receive_data()
 
 	elif state == WebSocketPeer.STATE_CLOSED:
 		if connected:
-			print("❌ Connection closed")
+			G.log_message("Connection closed")
 			connected = false
 
 
@@ -49,11 +49,12 @@ func send_data():
 			"positionWallSectorX": G.wall_positions_x,
 			"positionWallSectorY": G.wall_positions_y
 		},
-		"collisions": G.collisions
+		"collisions": G.collisions,
+		"selectedRegression": G.selected_regression
 	}
 
 	if G.clear_positions_x.size() > 0 and send_timer <= 0:
-		print("📤 Sending: ", G.clear_positions_x.size(), " positions")
+		G.log_message("Sending: %d positions" % G.clear_positions_x.size())
 		socket.send_text(JSON.stringify(data))
 		send_timer = send_cooldown  # Встановити затримку
 
@@ -71,30 +72,34 @@ func receive_data():
 		var parsed = JSON.parse_string(msg)
 
 		if parsed == null:
-			print("❌ JSON parse failed")
+			G.log_message("JSON parse failed")
 			return
 
 		if not parsed.has("status"):
-			print("❌ No status in response")
+			G.log_message("No status in response")
 			return
 
 		if parsed["status"] != "success":
 			if parsed["status"] == "waiting":
 				pass  # Collecting data, wait
 			else:
-				print("⚠️ Server status: ", parsed["status"])
+				G.log_message("Server status: %s" % parsed["status"])
 			return
 
-		if not parsed.has("models") or not parsed["models"].has("linear"):
-			print("❌ Invalid response structure")
+		if not parsed.has("models") or not parsed["models"].has(G.selected_regression):
+			G.log_message("Invalid response structure")
 			return
 
-		var pos = parsed["models"]["linear"][0]
+		var model_predictions = parsed["models"][G.selected_regression]
+		if not model_predictions is Array or model_predictions.is_empty():
+			G.log_message("Empty regression prediction")
+			return
+		var pos = model_predictions[0]
 
 		if pos is Array and pos.size() >= 2:
 			G.target_position = Vector2(pos[0], pos[1])
 			G.has_new_data = true
-			print("✅ Prediction received: ", G.target_position)
+			G.log_message("%s prediction received: %s" % [G.selected_regression, G.target_position])
 		
 			# Keep last 2 positions for continuous data flow
 			if G.clear_positions_x.size() > 2:
@@ -103,4 +108,4 @@ func receive_data():
 			if G.wall_positions_x.size() > 2:
 				G.wall_positions_x = G.wall_positions_x.slice(-2)
 				G.wall_positions_y = G.wall_positions_y.slice(-2)
-			print("🔄 Keeping last 2 positions for next batch")
+			G.log_message("Keeping last 2 positions for next batch")
